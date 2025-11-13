@@ -1,0 +1,8 @@
+plt.figure(figsize=(7,4))
+plt.plot(z, XZ[:,NT//2,NT//2], label='Ray trace',color='blue')
+plt.xlim(0, z[-1])
+plt.xlabel('z [mm]')
+plt.ylabel('X(z) [mm]')
+plt.grid(True, alpha=0.3)
+plt.legend()
+plt.tight_layout()
