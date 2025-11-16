@@ -67,8 +67,8 @@ def rescale_by_magnification(img_b, dx, dy, M, alpha=None, fill=0.0):
     return out
 
 #--センサ面のパラメータ--
-Nx=512           # x方向のサンプリング数
-Ny=512            # y方向のサンプリング数
+Nx=128            # x方向のサンプリング数
+Ny=128            # y方向のサンプリング数
 dpi=1200          # センサのdpi
 inch=25.4         # インチ[mm]
 dx = inch/dpi     # x方向のサンプリング間隔 [mm/px]
@@ -88,7 +88,14 @@ for i in range(Ny):
             Object_map[i][j]=1
 #-----------------------------------------------
 
-
+#-- plane2----------------------------------------
+Nx2=Nx
+Ny2=Ny
+dx2=dx
+dy2=dy
+x2=(np.linspace(-Nx2/2,Nx2/2-1,Nx2)) * dx2  # [mm]
+y2=(np.linspace(-Ny2/2,Ny2/2-1,Ny2)) * dy2  # [mm]
+X2,Y2 = np.meshgrid(x2,y2)
 
 
 
@@ -97,7 +104,7 @@ for i in range(Ny):
 Lo = 30.7 #infocus時の物体-レンズ間距離
 wavelen=570e-6
 k=2*np.pi/wavelen
-dzo=0 #デフォーカス量
+dzo=-1.5 #デフォーカス量
 d1=Lo+dzo # デフォーカス時の物体-レンズ間距離
 
 #--最小二乗法で求めたGRINレンズパラメータ
@@ -108,13 +115,6 @@ n1=1.6531323196563283
 L=35.13 # GRINレンズのz方向の長さ
 R=0.5 #瞳半径
 #====================================================================
-
-# alpha=0.1783
-# n1=1.608
-# L=20.4
-# R=0.5225
-# d1=13.782
-# Lo=d1
 
 #-- 一次光学行列--------------------------------------------
 A=np.cos(alpha*L)
@@ -128,34 +128,18 @@ d2ideal=-(A*d1+B)/(C*d1+D)
 d2=-(A*Lo+B)/(C*Lo+D)
 M=-1/(C*d1+D) #倍率
 
-print(d2)
+
 v_cutoff=2*R / (wavelen * d2) #カットオフ周波数
 
-#-- plane2----------------------------------------
-Nx2=Nx
-Ny2=Ny
-dx2=wavelen*d2/(dx*Nx)
-dy2=wavelen*d2/(dy*Ny)
-Npad=int((R*1.5)/dx2)
+#--カットオフ周波数がナイキスト周波数より高いためカットオフ周波数の1.1倍まで広げる----
 
-x2=(np.linspace(-Nx2/2-Npad,Nx2/2-1+Npad,Nx2+2*Npad)) * dx2  # [mm]
-y2=(np.linspace(-Ny2/2-Npad,Ny2/2-1+Npad,Ny2+2*Npad)) * dy2  # [mm]
-X2,Y2 = np.meshgrid(x2,y2)
-print("x2max",x2[-1])
+#--------------------------------------------
 
-dx2r=dx2*5
-dy2r=dy2*5
-Nx2r=len(x2)//5
-Ny2r=len(y2)//5
-x2r=(np.linspace(-Nx2r/2,Nx2r/2-1,Nx2r)) * dx2r  # [mm]
-y2r=(np.linspace(-Ny2r/2,Ny2r/2-1,Ny2r)) * dy2r  # [mm]
-X2r,Y2r=np.meshgrid(x2r,y2r)
 
-print("x2max",x2r[-1])
 # --- 初期方向余弦（光軸方向からの傾き） ---
-norm = np.sqrt((X2r)**2 + (Y2r)**2 + d1**2)
-A0 = (X2r) / norm     # x方向の方向余弦
-B0 = (Y2r) / norm     # y方向の方向余弦
+norm = np.sqrt((X2)**2 + (Y2)**2 + d1**2)
+A0 = (X2) / norm     # x方向の方向余弦
+B0 = (Y2) / norm     # y方向の方向余弦
 C0 = d1 / norm     # z方向の方向余弦
 
 # --- z軸配列 ---
@@ -164,68 +148,121 @@ z = np.arange(0, L + deltaz, deltaz)
 Z = z[:, np.newaxis, np.newaxis]     # shape = (Nz,1,1)
 
 # --- 光線軌跡 式(3a) ---
-den_raw = n1**2 - n1**2*alpha**2*(X2r**2 + Y2r**2) - (1 - C0**2)
+den = np.sqrt(n1**2 - n1**2*alpha**2*((X2)**2 + (Y2)**2) - (1 - C0**2))
+XZ = np.cos(n1*alpha*Z/den)*(X2) + (1/(n1*alpha))*np.sin(n1*alpha*Z/den)*A0
+YZ = np.cos(n1*alpha*Z/den)*(Y2) + (1/(n1*alpha))*np.sin(n1*alpha*Z/den)*B0
 
-# 負なら 1、正なら sqrt(den_raw)
-den = np.where(den_raw > 0, np.sqrt(den_raw), 1.0)
-XZ=np.zeros((Z*X2r).shape)
-YZ=np.zeros((Z*Y2r).shape)
-print(XZ.shape)
+X3 = np.cos(n1*alpha*L/den)*(X2) + (1/(n1*alpha))*np.sin(n1*alpha*L/den)*(X2/norm)
+Y3 = np.cos(n1*alpha*L/den)*(Y2) + (1/(n1*alpha))*np.sin(n1*alpha*L/den)*(Y2/norm)
 
-XZ = np.cos(n1*alpha*Z/den)*(X2r) + (1/(n1*alpha))*np.sin(n1*alpha*Z/den)*A0
-YZ = np.cos(n1*alpha*Z/den)*(Y2r) + (1/(n1*alpha))*np.sin(n1*alpha*Z/den)*B0
-print("XZ",XZ.shape)
-X3 = XZ[-1,:,:]#np.cos(n1*alpha*L/den)*(X2) + (1/(n1*alpha))*np.sin(n1*alpha*L/den)*(X2/norm)
-Y3 = YZ[-1,:,:]#np.cos(n1*alpha*L/den)*(Y2) + (1/(n1*alpha))*np.sin(n1*alpha*L/den)*(Y2/norm)
 
 # --- 屈折率分布と積分 式(8) ---
 N2 = n1**2 * (1 - alpha**2 * ((XZ)**2 + (YZ)**2))
 OPL_num = np.trapz(N2, z, axis=0)        # 台形則で z 方向に積分
-OPL_den = np.sqrt(n1**2 - n1**2*alpha**2*((X2r)**2+(Y2r)**2) - (1 - C0**2))
-OPL=np.zeros(X3.shape)
-OPL = OPL_num / OPL_den +np.sqrt(d1**2+(X2r)**2+(Y2r)**2) 
+OPL_den = np.sqrt(n1**2 - n1**2*alpha**2*((X2)**2+(X2)**2) - (1 - C0**2))
+
+OPL = OPL_num / OPL_den +d1 #+np.sqrt(d1**2+(X2)**2+(Y2)**2) 
+
 
 # ---- 収差関数 OPD 式(16)
-delta=OPL+np.sqrt((d2)**2+(X3)**2+(Y3)**2)-d1-n1*L-(d2)
+delta=OPL+np.sqrt(float(d2ideal)**2+(X3)**2+(Y3)**2)-d1-n1*L-(d2)
+
+# ----収差伝達関数 式(18)
+P3_aperture = np.where((X3)**2 + (Y3)**2 <= (R)**2, 1.0, 0.0)
+T3=P3_aperture*np.exp(-1j*k*delta)
+
 
 # --- 目的の等間隔格子（FFTに使いやすい正方格子・2のべき推奨） ---
-xg = x2.copy()   # すでに dx 間隔
-yg = y2.copy()   # すでに dy 間隔
+xg = x.copy()   # すでに dx 間隔
+yg = y.copy()   # すでに dy 間隔
 Xg, Yg = np.meshgrid(xg, yg)
 
 # --- 入力散布点（X3,Y3 はあなたの計算結果; 単位[mm]） ---
 pts = np.column_stack([X3.ravel(), Y3.ravel()])
 
 # --- 複素場を実部・虚部で補間 ---
-vals_re = delta.ravel()
+vals_re = np.real(T3).ravel()
+vals_im = np.imag(T3).ravel()
 
 Tg_re = griddata(pts, vals_re, (Xg, Yg), method='linear')
+Tg_im = griddata(pts, vals_im, (Xg, Yg), method='linear')
+
 # 線形補間で埋まらない凸包外は最近傍で補完
 Tg_re_nn = griddata(pts, vals_re, (Xg, Yg), method='nearest')
+Tg_im_nn = griddata(pts, vals_im, (Xg, Yg), method='nearest')
 
 Tg_re = np.where(np.isnan(Tg_re), Tg_re_nn, Tg_re)
-deltad = Tg_re
+Tg_im = np.where(np.isnan(Tg_im), Tg_im_nn, Tg_im)
+Tg = Tg_re + 1j*Tg_im
+
+# --- 開口外を0に（安全策） ---
+apert = (Xg**2 + Yg**2) <= R**2
+Tg *= apert.astype(Tg.dtype)
+
+# # ビンの境界（エッジ）を dx/2, dy/2 だけ外側にずらしたものとして作る
+# x_edges = np.concatenate([xg - dx/2, [xg[-1] + dx/2]])
+# y_edges = np.concatenate([yg - dy/2, [yg[-1] + dy/2]])
+
+# # 実部・虚部を座標に応じて 2Dヒストグラム集計
+# vals_re = np.real(T3).ravel()
+# vals_im = np.imag(T3).ravel()
+
+# H_re, _, _ = np.histogram2d(
+#     Y3.ravel(), X3.ravel(),
+#     bins=[y_edges, x_edges],
+#     weights=vals_re
+# )
+# H_im, _, _ = np.histogram2d(
+#     Y3.ravel(), X3.ravel(),
+#     bins=[y_edges, x_edges],
+#     weights=vals_im
+# )
+# Cnt,  _, _ = np.histogram2d(
+#     Y3.ravel(), X3.ravel(),
+#     bins=[y_edges, x_edges]
+# )
+
+# # ビン内の複素平均（Cnt=0 のところは 0 に）
+# Tg = (H_re + 1j*H_im) / np.maximum(Cnt, 1)
+
+# 開口外は 0 に
+# apert = (Xg**2 + Yg**2) <= R**2
+# Tg *= apert.astype(Tg.dtype)
 
 
-
-# ----収差伝達関数 式(18)
-P3_aperture = np.where((Xg)**2 + (Yg)**2 <= (R)**2, 1.0, 0.0)
-T3=P3_aperture#*np.exp(-1j*k*deltad)
-
+# === 振幅ホットマップ ===
+plt.figure(figsize=(6,5))
+# plt.imshow(
+#     np.abs(Tg),
+#     extent=[xg[0], xg[-1], yg[0], yg[-1]],
+#     cmap='hot', origin='lower'
+# )
+plt.imshow(
+    np.abs(T3),
+    extent=[X3[Ny//2,0], X3[Ny//2,-1], Y3[0,Nx//2], Y3[-1,Nx//2]],
+    cmap='hot', origin='lower'
+)
+plt.colorbar(label='Amplitude')
+plt.title('Pupil amplitude |Tg| (binned, dx,dy grid)')
+plt.xlabel('x [mm]')
+plt.ylabel('y [mm]')
+plt.tight_layout()
 
 plt.figure(figsize=(7,4))
-plt.plot(X3[Ny2r//2,:], delta[Ny2r//2,:],color='blue')
+plt.plot(X2[Ny//2,:], X3[Ny//2,:],color='blue')
 plt.grid(True, alpha=0.3)
 plt.legend()
 plt.tight_layout()
 
-NT=len(x2)
 plt.figure(figsize=(7,4))
-plt.plot(Xg[NT//2,:], deltad[NT//2,:],color='red')
+plt.plot(z, XZ[:,Ny//2,Nx//2+8], label='Ray trace',color='blue')
+plt.xlim(0, z[-1])
+plt.xlabel('z [mm]')
+plt.ylabel('X(z) [mm]')
 plt.grid(True, alpha=0.3)
 plt.legend()
 plt.tight_layout()
-
+plt.show()
 
 #--- PSF OTF MTF計算
 #h=M*np.exp(-1j*k*(d1+n1*L+d2ideal))/(wavelen**2*d2ideal**2)*np.exp(-1j*k*((X2)**2+(Y2)**2)/(2*d2))*np.fft.ifft2(T3)*(wavelen**2*d2ideal**2)
@@ -233,17 +270,15 @@ h=np.fft.ifft2(np.fft.ifftshift(T3))
 PSF=np.fft.fftshift(abs(h)**2)
 OTF=np.fft.fftshift(np.fft.fft2(PSF))
 OTF=OTF/np.max(OTF)
-OTF_c=OTF[Npad:-Npad,Npad:-Npad]
+OTF_reshape=OTF[Npad:-Npad, Npad:-Npad] #センサ面と軸を合わせるためにクリッピング
 MTF=np.abs(OTF)
 MTF=MTF/np.max(MTF)
 
-fx=xg/(wavelen*d2)
-fy=yg/(wavelen*d2)
-FX,FY=np.meshgrid(fx,fy)
+
 #-- 物体を倍率Mでリサイズ→OTFで畳み込み
 Image_map=rescale_by_magnification(Object_map, dx, dy, 1/M)
 Fimg  = np.fft.fftshift(np.fft.fft2(Image_map))
-Fout  = Fimg * OTF_c
+Fout  = Fimg * OTF_reshape
 img_b = np.fft.fftshift(np.fft.ifft2(np.fft.ifftshift(Fout)))
 img_b=np.abs(img_b)
 
@@ -254,7 +289,7 @@ img_b=np.abs(img_b)
 # MTF（FY=0[lp/mm]で切り出し）
 center_row = NT//2
 plt.figure(figsize=(7,4))
-plt.plot(FX[center_row,:], MTF[center_row,:],color='blue')
+plt.plot(FX2[center_row,:], MTF[center_row,:],color='blue')
 plt.axvline(v_cutoff, color='r', ls='--', lw=1, label=f'Cutoff={v_cutoff:.1f} cy/mm')
 plt.xlim(0, 23.5)
 plt.ylim(0, 1.05)
@@ -263,7 +298,7 @@ plt.ylabel('MTF')
 plt.grid(True, alpha=0.3)
 plt.legend()
 plt.tight_layout()
-print("fxlim",fx[-1])
+
 
 # 像（前後比較）
 # ==== ここを差し替え：像（前後比較）を mm 軸つきで表示 ====
