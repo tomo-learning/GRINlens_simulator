@@ -109,12 +109,6 @@ L=35.13 # GRINレンズのz方向の長さ
 R=0.5 #瞳半径
 #====================================================================
 
-# alpha=0.1783
-# n1=1.608
-# L=20.4
-# R=0.5225
-# d1=13.782
-# Lo=d1
 
 #-- 一次光学行列--------------------------------------------
 A=np.cos(alpha*L)
@@ -123,26 +117,26 @@ C=-n1*alpha*np.sin(alpha*L)
 D=np.cos(alpha*L)
 #--------------------------------------------------------
 
-#--defocus時の理想結像距離をd2ideal、実際のレンズ-センサ間距離をd2としている (レンズ-センサ間の距離を固定にしているため)
+#--defocus時の理想結像距離をd2ideal、実際のレンズ-センサ間距離をd2 
 d2ideal=-(A*d1+B)/(C*d1+D)
 d2=-(A*Lo+B)/(C*Lo+D)
 M=-1/(C*d1+D) #倍率
 
-print(d2)
 v_cutoff=2*R / (wavelen * d2) #カットオフ周波数
 
-#-- plane2----------------------------------------
+#-- plane3 瞳半径より広くサンプリング----------------------------------------
 Nx2=Nx
 Ny2=Ny
 dx2=wavelen*d2/(dx*Nx)
 dy2=wavelen*d2/(dy*Ny)
 Npad=int((R*1.5)/dx2)
-
 x2=(np.linspace(-Nx2/2-Npad,Nx2/2-1+Npad,Nx2+2*Npad)) * dx2  # [mm]
 y2=(np.linspace(-Ny2/2-Npad,Ny2/2-1+Npad,Ny2+2*Npad)) * dy2  # [mm]
 X2,Y2 = np.meshgrid(x2,y2)
-print("x2max",x2[-1])
+#-----------------------------------------------------------------
 
+
+#plane2 ray-traceに時間がかかるため粗い格子を作る----------------------------
 dx2r=dx2*5
 dy2r=dy2*5
 Nx2r=len(x2)//5
@@ -150,8 +144,9 @@ Ny2r=len(y2)//5
 x2r=(np.linspace(-Nx2r/2,Nx2r/2-1,Nx2r)) * dx2r  # [mm]
 y2r=(np.linspace(-Ny2r/2,Ny2r/2-1,Ny2r)) * dy2r  # [mm]
 X2r,Y2r=np.meshgrid(x2r,y2r)
+#----------------------------------------------------------------------------
 
-print("x2max",x2r[-1])
+
 # --- 初期方向余弦（光軸方向からの傾き） ---
 norm = np.sqrt((X2r)**2 + (Y2r)**2 + d1**2)
 A0 = (X2r) / norm     # x方向の方向余弦
@@ -174,9 +169,11 @@ print(XZ.shape)
 
 XZ = np.cos(n1*alpha*Z/den)*(X2r) + (1/(n1*alpha))*np.sin(n1*alpha*Z/den)*A0
 YZ = np.cos(n1*alpha*Z/den)*(Y2r) + (1/(n1*alpha))*np.sin(n1*alpha*Z/den)*B0
-print("XZ",XZ.shape)
-X3 = XZ[-1,:,:]#np.cos(n1*alpha*L/den)*(X2) + (1/(n1*alpha))*np.sin(n1*alpha*L/den)*(X2/norm)
-Y3 = YZ[-1,:,:]#np.cos(n1*alpha*L/den)*(Y2) + (1/(n1*alpha))*np.sin(n1*alpha*L/den)*(Y2/norm)
+
+# plane3の不等間隔グリッド---
+X3 = XZ[-1,:,:]
+Y3 = YZ[-1,:,:]
+#---------------------------
 
 # --- 屈折率分布と積分 式(8) ---
 N2 = n1**2 * (1 - alpha**2 * ((XZ)**2 + (YZ)**2))
@@ -188,7 +185,7 @@ OPL = OPL_num / OPL_den +np.sqrt(d1**2+(X2r)**2+(Y2r)**2)
 # ---- 収差関数 OPD 式(16)
 delta=OPL+np.sqrt((d2)**2+(X3)**2+(Y3)**2)-d1-n1*L-(d2)
 
-# --- 目的の等間隔格子（FFTに使いやすい正方格子・2のべき推奨） ---
+#============= 等間隔グリッドに写像 =================================================
 xg = x2.copy()   # すでに dx 間隔
 yg = y2.copy()   # すでに dy 間隔
 Xg, Yg = np.meshgrid(xg, yg)
@@ -205,6 +202,8 @@ Tg_re_nn = griddata(pts, vals_re, (Xg, Yg), method='nearest')
 
 Tg_re = np.where(np.isnan(Tg_re), Tg_re_nn, Tg_re)
 deltad = Tg_re
+
+#====================================================================================
 
 
 
