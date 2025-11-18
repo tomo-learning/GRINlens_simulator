@@ -67,8 +67,8 @@ def rescale_by_magnification(img_b, dx, dy, M, alpha=None, fill=0.0):
     return out
 
 #--センサ面のパラメータ--
-Nx=512           # x方向のサンプリング数
-Ny=512            # y方向のサンプリング数
+Nx=32           # x方向のサンプリング数
+Ny=32            # y方向のサンプリング数
 dpi=1200          # センサのdpi
 inch=25.4         # インチ[mm]
 dx = inch/dpi     # x方向のサンプリング間隔 [mm/px]
@@ -97,8 +97,13 @@ for i in range(Ny):
 Lo = 30.7 #infocus時の物体-レンズ間距離
 wavelen=570e-6
 k=2*np.pi/wavelen
-dzo=0 #デフォーカス量
+dzo=5 #デフォーカス量
 d1=Lo+dzo # デフォーカス時の物体-レンズ間距離
+
+#---瞳関数に関するパラメータ
+rho0=1 #瞳面振幅伝達関数のρ0
+k_A=7  #瞳面振幅伝達関数のk
+a=-500e-5 #球面収差の係数
 
 #--最小二乗法で求めたGRINレンズパラメータ
 alpha=0.03148084603797629
@@ -124,33 +129,34 @@ M=-1/(C*d1+D) #倍率
 
 v_cutoff=2*R / (wavelen * d2) #カットオフ周波数
 
-#-- plane3 瞳半径より広くサンプリング----------------------------------------
-Nx2=Nx
-Ny2=Ny
-dx2=wavelen*d2/(dx*Nx)
-dy2=wavelen*d2/(dy*Ny)
-Npad=int((R*1.5)/dx2)
-x2=(np.linspace(-Nx2/2-Npad,Nx2/2-1+Npad,Nx2+2*Npad)) * dx2  # [mm]
-y2=(np.linspace(-Ny2/2-Npad,Ny2/2-1+Npad,Ny2+2*Npad)) * dy2  # [mm]
-X2,Y2 = np.meshgrid(x2,y2)
+#-- plane3 等間隔格子 瞳半径より広くサンプリング----------------------------------------
+Nx3=Nx
+Ny3=Ny
+dx3=wavelen*d2/(dx*Nx)
+dy3=wavelen*d2/(dy*Ny)
+Npad=int((R*1.5)/dx3)
+x3=(np.linspace(-Nx3/2-Npad,Nx3/2-1+Npad,Nx3+2*Npad)) * dx3  # [mm]
+y3=(np.linspace(-Ny3/2-Npad,Ny3/2-1+Npad,Ny3+2*Npad)) * dy3  # [mm]
+X3,Y3 = np.meshgrid(x3,y3)
+NT=len(x3)
 #-----------------------------------------------------------------
 
 
 #plane2 ray-traceに時間がかかるため粗い格子を作る----------------------------
-dx2r=dx2*5
-dy2r=dy2*5
-Nx2r=len(x2)//5
-Ny2r=len(y2)//5
-x2r=(np.linspace(-Nx2r/2,Nx2r/2-1,Nx2r)) * dx2r  # [mm]
-y2r=(np.linspace(-Ny2r/2,Ny2r/2-1,Ny2r)) * dy2r  # [mm]
-X2r,Y2r=np.meshgrid(x2r,y2r)
+dx2=dx3*5
+dy2=dy3*5
+Nx2=len(x3)//5
+Ny2=len(y3)//5
+x2=(np.linspace(-Nx2/2,Nx2/2-1,Nx2)) * dx2  # [mm]
+y2=(np.linspace(-Ny2/2,Ny2/2-1,Ny2)) * dy2  # [mm]
+X2,Y2=np.meshgrid(x2,y2)
 #----------------------------------------------------------------------------
 
 
 # --- 初期方向余弦（光軸方向からの傾き） ---
-norm = np.sqrt((X2r)**2 + (Y2r)**2 + d1**2)
-A0 = (X2r) / norm     # x方向の方向余弦
-B0 = (Y2r) / norm     # y方向の方向余弦
+norm = np.sqrt((X2)**2 + (Y2)**2 + d1**2)
+A0 = (X2) / norm     # x方向の方向余弦
+B0 = (Y2) / norm     # y方向の方向余弦
 C0 = d1 / norm     # z方向の方向余弦
 
 # --- z軸配列 ---
@@ -159,71 +165,51 @@ z = np.arange(0, L + deltaz, deltaz)
 Z = z[:, np.newaxis, np.newaxis]     # shape = (Nz,1,1)
 
 # --- 光線軌跡 式(3a) ---
-den_raw = n1**2 - n1**2*alpha**2*(X2r**2 + Y2r**2) - (1 - C0**2)
+den_raw = n1**2 - n1**2*alpha**2*(X2**2 + Y2**2) - (1 - C0**2)
 
 # 負なら 1、正なら sqrt(den_raw)
 den = np.where(den_raw > 0, np.sqrt(den_raw), 1.0)
-XZ=np.zeros((Z*X2r).shape)
-YZ=np.zeros((Z*Y2r).shape)
-print(XZ.shape)
+XZ=np.zeros((Z*X2).shape)
+YZ=np.zeros((Z*Y2).shape)
 
-XZ = np.cos(n1*alpha*Z/den)*(X2r) + (1/(n1*alpha))*np.sin(n1*alpha*Z/den)*A0
-YZ = np.cos(n1*alpha*Z/den)*(Y2r) + (1/(n1*alpha))*np.sin(n1*alpha*Z/den)*B0
+XZ = np.cos(n1*alpha*Z/den)*(X2) + (1/(n1*alpha))*np.sin(n1*alpha*Z/den)*A0
+YZ = np.cos(n1*alpha*Z/den)*(Y2) + (1/(n1*alpha))*np.sin(n1*alpha*Z/den)*B0
 
 # plane3の不等間隔グリッド---
-X3 = XZ[-1,:,:]
-Y3 = YZ[-1,:,:]
+X3t = XZ[-1,:,:]
+Y3t = YZ[-1,:,:]
 #---------------------------
 
 # --- 屈折率分布と積分 式(8) ---
 N2 = n1**2 * (1 - alpha**2 * ((XZ)**2 + (YZ)**2))
 OPL_num = np.trapz(N2, z, axis=0)        # 台形則で z 方向に積分
-OPL_den = np.sqrt(n1**2 - n1**2*alpha**2*((X2r)**2+(Y2r)**2) - (1 - C0**2))
-OPL=np.zeros(X3.shape)
-OPL = OPL_num / OPL_den +np.sqrt(d1**2+(X2r)**2+(Y2r)**2) 
+OPL_den = np.sqrt(n1**2 - n1**2*alpha**2*((X2)**2+(Y2)**2) - (1 - C0**2))
+OPL = OPL_num / OPL_den +np.sqrt(d1**2+(X2)**2+(Y2)**2) 
 
 # ---- 収差関数 OPD 式(16)
-delta=OPL+np.sqrt((d2)**2+(X3)**2+(Y3)**2)-d1-n1*L-(d2)
+delta=OPL+np.sqrt((d2)**2+(X3t)**2+(Y3t)**2)-d1-n1*L-(d2)
 
-#============= 等間隔グリッドに写像 =================================================
-xg = x2.copy()   # すでに dx 間隔
-yg = y2.copy()   # すでに dy 間隔
-Xg, Yg = np.meshgrid(xg, yg)
-
-# --- 入力散布点（X3,Y3 はあなたの計算結果; 単位[mm]） ---
-pts = np.column_stack([X3.ravel(), Y3.ravel()])
-
-# --- 複素場を実部・虚部で補間 ---
+#--deltaを等間隔格子(Y3,X3)に写像
+pts = np.column_stack([X3t.ravel(), Y3t.ravel()])
 vals_re = delta.ravel()
-
-Tg_re = griddata(pts, vals_re, (Xg, Yg), method='linear')
+Tg_re = griddata(pts, vals_re, (X3, Y3), method='linear')
 # 線形補間で埋まらない凸包外は最近傍で補完
-Tg_re_nn = griddata(pts, vals_re, (Xg, Yg), method='nearest')
-
+Tg_re_nn = griddata(pts, vals_re, (X3, Y3), method='nearest')
 Tg_re = np.where(np.isnan(Tg_re), Tg_re_nn, Tg_re)
 deltad = Tg_re
-
 #====================================================================================
 
 
+# ======収差伝達関数 式(18)===================================
+P3_aperture = np.where((X3)**2 + (Y3)**2 <= (R)**2, 1.0, 0.0)
+Ws=np.sqrt((X3)**2 + (Y3)**2)**4 #球面収差関数
+#--瞳面振幅伝達関数
+A = np.ones_like(P3_aperture) 
+A = np.sqrt(np.exp(-(np.sqrt((X3)**2+(Y3)**2)/R/rho0)**k_A))
 
-# ----収差伝達関数 式(18)
-P3_aperture = np.where((Xg)**2 + (Yg)**2 <= (R)**2, 1.0, 0.0)
-T3=P3_aperture#*np.exp(-1j*k*deltad)
-
-
-plt.figure(figsize=(7,4))
-plt.plot(X3[Ny2r//2,:], delta[Ny2r//2,:],color='blue')
-plt.grid(True, alpha=0.3)
-plt.legend()
-plt.tight_layout()
-
-NT=len(x2)
-plt.figure(figsize=(7,4))
-plt.plot(Xg[NT//2,:], deltad[NT//2,:],color='red')
-plt.grid(True, alpha=0.3)
-plt.legend()
-plt.tight_layout()
+W=deltad+a*Ws
+T3=A*P3_aperture*np.exp(-1j*k*W)
+#=================================================================
 
 
 #--- PSF OTF MTF計算
@@ -236,8 +222,8 @@ OTF_c=OTF[Npad:-Npad,Npad:-Npad]
 MTF=np.abs(OTF)
 MTF=MTF/np.max(MTF)
 
-fx=xg/(wavelen*d2)
-fy=yg/(wavelen*d2)
+fx=x3/(wavelen*d2)
+fy=y3/(wavelen*d2)
 FX,FY=np.meshgrid(fx,fy)
 #-- 物体を倍率Mでリサイズ→OTFで畳み込み
 Image_map=rescale_by_magnification(Object_map, dx, dy, 1/M)
