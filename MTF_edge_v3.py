@@ -9,11 +9,7 @@ oversample = 4                # ESFのサブピクセル分割
 sg_poly = 3                   # Savitzky–Golay 多項式次数
 sg_win  = 51                  # Savitzky–Golay 窓長（奇数）
 use_click = True            # True: 画像からクリックで点を取る / False: 手入力
-do=32+3.5
-di=32
-M=di/do
-print("M",M)
-img_path = R"c:\Users\mrtmk\OneDrive\Desktop\Research\GRINlens\actual_machine\d2_32\32_12.50_22.tiff"        # 入力画像（グレースケール推奨）
+img_path = R"file_pass"        # 入力画像（グレースケール推奨）
 # ========================================================================
 
 # --- 画像読込 ---
@@ -89,20 +85,13 @@ MTF = np.abs(rfft(LSF_w))
 MTF /= (MTF[0] + 1e-12)
 OTF=np.real(rfft(LSF_w))
 OTF/=(OTF[0]+1e-12)
-print(len(MTF))
 
 f_cyc_per_pix = rfftfreq(len(LSF_w), d=delta_px)  # [cycles/pixel]
 f_lpmm_sensor = f_cyc_per_pix / pixel_pitch_mm    # [lp/mm]（センサ面）
 x_ifft=np.fft.fftfreq(len(LSF_w),d=f_lpmm_sensor[2]-f_lpmm_sensor[1])
-print("x_ifft",x_ifft[2]-x_ifft[1])
-# 物体面に出したい場合は M（倍率）で割る： 
-f_obj = f_lpmm_sensor / abs(M)
-count=0
-for i in range(len(f_lpmm_sensor)):
-    if f_lpmm_sensor[i]<24:
-        count+=1
-print("MTF point num",count)
 
+
+# MTF プロット
 plt.figure(figsize=(7,4))
 plt.plot(f_lpmm_sensor, MTF)
 #plt.plot(f_obj, MTF)
@@ -112,9 +101,6 @@ plt.xlim(0, 23.53)
 plt.ylim(0, 1.05)
 plt.grid(True)
 plt.tight_layout()
-
-
-
 
 # 1) 最大 index を求める
 idx_max = np.argmax(LSF_w)
@@ -129,7 +115,7 @@ shift=0#idx_max
 # 中心をピークに合わせて座標配列を作成
 x_mm = (np.arange(Nx_lsf) - idx_max+shift) * step_mm
 
-# 3) プロット
+# LSF プロット
 plt.figure(figsize=(7,4))
 plt.plot(x_mm, LSF_w / np.max(LSF_w), label="LSF")
 plt.xlabel("Position [mm] (peak at 0 mm)")
@@ -140,6 +126,7 @@ plt.xlim(-0.2, 0.2)
 plt.grid(True)
 plt.tight_layout()
 
+#ESF プロット
 plt.figure(figsize=(7,4))
 plt.plot(x_mm, ESF)
 #plt.plot(f_obj, MTF)
@@ -159,7 +146,6 @@ overlay[edge_mask] = (0,255,0)
 plt.imshow(overlay[...,::-1]); plt.title("ROI & 指定エッジ(緑)"); plt.axis('off')
 
 plt.subplot(1,3,2)
-# plt.plot(grid, ESF); plt.grid(True); plt.xlabel("Distance [pixel]"); plt.ylabel("ESF (0-1)")
 plt.plot(x_mm, ESF); plt.grid(True); plt.xlabel("Distance [pixel]"); plt.ylabel("ESF (0-1)")
 plt.title("ESF (binned, oversample=%d)"%oversample)
 
