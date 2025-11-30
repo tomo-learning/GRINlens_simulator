@@ -67,8 +67,8 @@ def rescale_by_magnification(img_b, dx, dy, M, alpha=None, fill=0.0):
     return out
 
 #--センサ面のパラメータ--
-Nx=128           # x方向のサンプリング数
-Ny=128            # y方向のサンプリング数
+Nx=32           # x方向のサンプリング数
+Ny=32            # y方向のサンプリング数
 dpi=1200          # センサのdpi
 inch=25.4         # インチ[mm]
 dx = inch/dpi     # x方向のサンプリング間隔 [mm/px]
@@ -95,27 +95,28 @@ for i in range(Ny):
 
 #===パラメータ=================================================
 Lo = 32.4 #infocus時の物体-レンズ間距離
-wavelen=533e-6
+Li=32.4
+wavelen=530e-6
 k=2*np.pi/wavelen
-dzo=0 #デフォーカス量
-d1=Lo+dzo # デフォーカス時の物体-レンズ間距離
+dz=0 #デフォーカス量
+d1=Lo # デフォーカス時の物体-レンズ間距離
 
 #---瞳関数に関するパラメータ
 rho0=1 #瞳面振幅伝達関数のρ0
 k_A=100  #瞳面振幅伝達関数のk
-a=1.2 #球面収差の係数
-b=0 # 6-dimention
-c=0 # 8-dimention
+a=0.7 #球面収差の係数
+b=0#0.3#-1 # 6-dimention
+c=0#1 # 8-dimention
 d=0 #defocus
-e=1 # delta
+e=1#0.1 # delta
 
 #--最小二乗法で求めたGRINレンズパラメータ
-alpha=0.0995
-n1=1.589
+alpha=0.0996
+n1=1.592
 #-------------------------------------
 
 L=35.13 # GRINレンズのz方向の長さ
-R=0.55 #瞳半径
+R=0.4 #瞳半径
 #====================================================================
 
 
@@ -135,10 +136,8 @@ D=np.cos(alpha*L)
 
 #--defocus時の理想結像距離をd2ideal、実際のレンズ-センサ間距離をd2 
 d2ideal=-(A*d1+B)/(C*d1+D)
-d2=-(A*Lo+B)/(C*Lo+D)
+d2=Li#d2ideal+dz
 M=-1/(C*d1+D) #倍率
-dz=d2-d2ideal
-#d2=32.4
 print("dz",dz)
 print(d2ideal)
 v_cutoff=2*R / (wavelen * d2) #カットオフ周波数
@@ -210,7 +209,7 @@ Tg_re = griddata(pts, vals_re, (X3, Y3), method='linear')
 # 線形補間で埋まらない凸包外は最近傍で補完
 Tg_re_nn = griddata(pts, vals_re, (X3, Y3), method='nearest')
 Tg_re = np.where(np.isnan(Tg_re), Tg_re_nn, Tg_re)
-deltad = np.abs(Tg_re)
+deltad = (Tg_re)
 #====================================================================================
 
 
@@ -225,23 +224,23 @@ A = np.ones_like(P3_aperture)
 A = np.sqrt(np.exp(-(np.sqrt((X3)**2+(Y3)**2)/R/rho0)**k_A))
 
 W=-k*e*deltad+2*np.pi*a*Ws+2*np.pi*b*W6+2*np.pi*c*W8+2*np.pi*d*Wd
-T3=A*P3_aperture*np.exp(1j*W)
+T3=P3_aperture*np.exp(1j*W)
 #=================================================================
-plt.figure(figsize=(7,4))
-plt.plot(X3[NT//2,:], W[NT//2,:],color='blue')
-plt.xlim(-0.5, 0.5)
-plt.ylim(0,1)
-plt.xlabel('x3 [mm]')
-plt.ylabel('W [mm]')
-plt.grid(True, alpha=0.3)
-plt.legend()
-plt.tight_layout()
-plt.show()
+# plt.figure(figsize=(7,4))
+# plt.plot(X3[NT//2,:], W[NT//2,:],color='blue')
+# #plt.xlim(0, X3[NT//2,-1])
+# plt.xlabel('x3 [mm]')
+# plt.ylabel('W [mm]')
+# plt.grid(True, alpha=0.3)
+# plt.legend()
+# plt.tight_layout()
+# plt.show()
 
 #--- PSF OTF MTF計算
 #h=M*np.exp(-1j*k*(d1+n1*L+d2ideal))/(wavelen**2*d2ideal**2)*np.exp(-1j*k*((X2)**2+(Y2)**2)/(2*d2))*np.fft.ifft2(T3)*(wavelen**2*d2ideal**2)
 h=np.fft.ifft2(np.fft.ifftshift(T3))
 PSF=np.fft.fftshift(abs(h)**2)
+PSF=PSF
 OTF=np.fft.fftshift(np.fft.fft2(PSF))
 OTF=OTF/np.max(OTF)
 OTF_c=OTF[Npad:-Npad,Npad:-Npad]
@@ -250,8 +249,11 @@ MTF=MTF/np.max(MTF)
 
 fx=x3/(wavelen*d2)
 fy=y3/(wavelen*d2)
+#fx=np.fft.fftshift(np.fft.fftfreq(Nx,d=dx))
+#fy=np.fft.fftshift(np.fft.fftfreq(Ny,d=dy))
+
+#print("fx",fx[1]-fx[0],fx2[1]-fx2[0])
 FX,FY=np.meshgrid(fx,fy)
-print("dfx",fx[1]-fx[0])
 #-- 物体を倍率Mでリサイズ→OTFで畳み込み
 Image_map=rescale_by_magnification(Object_map, dx, dy, 1/M)
 Fimg  = np.fft.fftshift(np.fft.fft2(Image_map))
@@ -265,6 +267,7 @@ img_b=np.abs(img_b)
 # ----------------------------
 # MTF（FY=0[lp/mm]で切り出し）
 center_row = NT//2
+#center_row=Ny//2
 plt.figure(figsize=(7,4))
 plt.plot(FX[center_row,:], MTF[center_row,:],color='blue')
 plt.axvline(v_cutoff, color='r', ls='--', lw=1, label=f'Cutoff={v_cutoff:.1f} cy/mm')
@@ -316,14 +319,14 @@ vmax = max(Object_map.max(), img_b.max())
 # plt.tight_layout()
 plt.show()
 
-# import csv
+import csv
 
 # # --- CSV 出力 ---
 # row_index = NT // 2              # 中央行
 # x_vals = X3[row_index, :]        # X3 の中央行
 # w_vals = deltad[row_index, :]         # W の中央行
 
-# csv_path = R"C:\Users\mrtmk\OneDrive\Desktop\Research\GRINlens\csv\x3_w_2profile.csv"
+# csv_path = R"C:\Users\mrtmk\OneDrive\Desktop\Research\GRINlens\csv\m5_profile.csv"
 
 # with open(csv_path, "w", newline="") as f:
 #     writer = csv.writer(f)

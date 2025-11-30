@@ -67,8 +67,8 @@ def rescale_by_magnification(img_b, dx, dy, M, alpha=None, fill=0.0):
     return out
 
 #--センサ面のパラメータ--
-Nx=128           # x方向のサンプリング数
-Ny=128            # y方向のサンプリング数
+Nx=32           # x方向のサンプリング数
+Ny=32            # y方向のサンプリング数
 dpi=1200          # センサのdpi
 inch=25.4         # インチ[mm]
 dx = inch/dpi     # x方向のサンプリング間隔 [mm/px]
@@ -94,37 +94,29 @@ for i in range(Ny):
 
 
 #===パラメータ=================================================
-Lo = 32.4 #infocus時の物体-レンズ間距離
-wavelen=533e-6
+Lo = 30.7 #infocus時の物体-レンズ間距離
+wavelen=570e-6
 k=2*np.pi/wavelen
 dzo=0 #デフォーカス量
 d1=Lo+dzo # デフォーカス時の物体-レンズ間距離
 
 #---瞳関数に関するパラメータ
 rho0=1 #瞳面振幅伝達関数のρ0
-k_A=100  #瞳面振幅伝達関数のk
-a=1.2 #球面収差の係数
-b=0 # 6-dimention
-c=0 # 8-dimention
-d=0 #defocus
-e=1 # delta
+k_A=7  #瞳面振幅伝達関数のk
+a=0 #球面収差の係数
+b=0
+c=0
+d=0
 
 #--最小二乗法で求めたGRINレンズパラメータ
-alpha=0.0995
-n1=1.589
+alpha=0.0996
+n1=1.592
 #-------------------------------------
 
 L=35.13 # GRINレンズのz方向の長さ
-R=0.55 #瞳半径
+R=0.5 #瞳半径
 #====================================================================
 
-
-# alpha=0.1783
-# n1=1.608
-# L=20.4
-# R=0.5225
-# d1=13.782
-# Lo=d1
 
 #-- 一次光学行列--------------------------------------------
 A=np.cos(alpha*L)
@@ -136,11 +128,9 @@ D=np.cos(alpha*L)
 #--defocus時の理想結像距離をd2ideal、実際のレンズ-センサ間距離をd2 
 d2ideal=-(A*d1+B)/(C*d1+D)
 d2=-(A*Lo+B)/(C*Lo+D)
-M=-1/(C*d1+D) #倍率
 dz=d2-d2ideal
-#d2=32.4
-print("dz",dz)
-print(d2ideal)
+M=-1/(C*d1+D) #倍率
+
 v_cutoff=2*R / (wavelen * d2) #カットオフ周波数
 
 #-- plane3 等間隔格子 瞳半径より広くサンプリング----------------------------------------
@@ -201,7 +191,7 @@ OPL_den = np.sqrt(n1**2 - n1**2*alpha**2*((X2)**2+(Y2)**2) - (1 - C0**2))
 OPL = OPL_num / OPL_den +np.sqrt(d1**2+(X2)**2+(Y2)**2) 
 
 # ---- 収差関数 OPD 式(16)
-delta=OPL+np.sqrt((d2)**2+(X3t)**2+(Y3t)**2)-d1-n1*L-(d2)
+delta=OPL+np.sqrt((d2ideal+abs(dz))**2+(X3t)**2+(Y3t)**2)-d1-n1*L-(d2ideal+abs(dz))
 
 #--deltaを等間隔格子(Y3,X3)に写像
 pts = np.column_stack([X3t.ravel(), Y3t.ravel()])
@@ -210,7 +200,7 @@ Tg_re = griddata(pts, vals_re, (X3, Y3), method='linear')
 # 線形補間で埋まらない凸包外は最近傍で補完
 Tg_re_nn = griddata(pts, vals_re, (X3, Y3), method='nearest')
 Tg_re = np.where(np.isnan(Tg_re), Tg_re_nn, Tg_re)
-deltad = np.abs(Tg_re)
+deltad = (Tg_re)
 #====================================================================================
 
 
@@ -224,13 +214,12 @@ Wd=(np.sqrt((X3)**2 + (Y3)**2)/R)**2
 A = np.ones_like(P3_aperture) 
 A = np.sqrt(np.exp(-(np.sqrt((X3)**2+(Y3)**2)/R/rho0)**k_A))
 
-W=-k*e*deltad+2*np.pi*a*Ws+2*np.pi*b*W6+2*np.pi*c*W8+2*np.pi*d*Wd
+W=-k*deltad+2*np.pi*a*Ws+2*np.pi*b*W6+2*np.pi*c*W8+2*np.pi*d*Wd
 T3=A*P3_aperture*np.exp(1j*W)
 #=================================================================
 plt.figure(figsize=(7,4))
 plt.plot(X3[NT//2,:], W[NT//2,:],color='blue')
-plt.xlim(-0.5, 0.5)
-plt.ylim(0,1)
+#plt.xlim(0, X3[NT//2,-1])
 plt.xlabel('x3 [mm]')
 plt.ylabel('W [mm]')
 plt.grid(True, alpha=0.3)
@@ -251,7 +240,6 @@ MTF=MTF/np.max(MTF)
 fx=x3/(wavelen*d2)
 fy=y3/(wavelen*d2)
 FX,FY=np.meshgrid(fx,fy)
-print("dfx",fx[1]-fx[0])
 #-- 物体を倍率Mでリサイズ→OTFで畳み込み
 Image_map=rescale_by_magnification(Object_map, dx, dy, 1/M)
 Fimg  = np.fft.fftshift(np.fft.fft2(Image_map))
@@ -285,52 +273,35 @@ y_edges_mm = (np.arange(Ny + 1) - Ny/2) * dy
 
 vmax = max(Object_map.max(), img_b.max())
 
-# fig, axes = plt.subplots(1, 2, figsize=(9, 4))
+fig, axes = plt.subplots(1, 2, figsize=(9, 4))
 
-# im0 = axes[0].imshow(
-#     Object_map,
-#     extent=[x_edges_mm[0], x_edges_mm[-1], y_edges_mm[0], y_edges_mm[-1]],
-#     origin='lower', cmap='hot', vmin=0, vmax=vmax, aspect='equal'
-# )
-# axes[0].set_title('Input (aberration-free)')
-# axes[0].set_xlabel('x [mm]')     # ← 単位ラベル
-# axes[0].set_ylabel('y [mm]')
-# axes[0].axhline(0, color='w', lw=0.6, alpha=0.4)
-# axes[0].axvline(0, color='w', lw=0.6, alpha=0.4)
-# cbar0 = plt.colorbar(im0, ax=axes[0])
-# cbar0.set_label('Intensity [a.u.]')
+im0 = axes[0].imshow(
+    Object_map,
+    extent=[x_edges_mm[0], x_edges_mm[-1], y_edges_mm[0], y_edges_mm[-1]],
+    origin='lower', cmap='hot', vmin=0, vmax=vmax, aspect='equal'
+)
+axes[0].set_title('Input (aberration-free)')
+axes[0].set_xlabel('x [mm]')     # ← 単位ラベル
+axes[0].set_ylabel('y [mm]')
+axes[0].axhline(0, color='w', lw=0.6, alpha=0.4)
+axes[0].axvline(0, color='w', lw=0.6, alpha=0.4)
+cbar0 = plt.colorbar(im0, ax=axes[0])
+cbar0.set_label('Intensity [a.u.]')
 
-# im1 = axes[1].imshow(
-#     img_b,
-#     extent=[x_edges_mm[0], x_edges_mm[-1], y_edges_mm[0], y_edges_mm[-1]],
-#     origin='lower', cmap='hot', vmin=0, vmax=vmax, aspect='equal'
-# )
-# axes[1].set_title('After MTF (diffraction × Gaussian)')
-# axes[1].set_xlabel('x [mm]')     # ← 単位ラベル
-# axes[1].set_ylabel('y [mm]')
-# axes[1].axhline(0, color='w', lw=0.6, alpha=0.4)
-# axes[1].axvline(0, color='w', lw=0.6, alpha=0.4)
-# cbar1 = plt.colorbar(im1, ax=axes[1])
-# cbar1.set_label('Intensity [a.u.]')
+im1 = axes[1].imshow(
+    img_b,
+    extent=[x_edges_mm[0], x_edges_mm[-1], y_edges_mm[0], y_edges_mm[-1]],
+    origin='lower', cmap='hot', vmin=0, vmax=vmax, aspect='equal'
+)
+axes[1].set_title('After MTF (diffraction × Gaussian)')
+axes[1].set_xlabel('x [mm]')     # ← 単位ラベル
+axes[1].set_ylabel('y [mm]')
+axes[1].axhline(0, color='w', lw=0.6, alpha=0.4)
+axes[1].axvline(0, color='w', lw=0.6, alpha=0.4)
+cbar1 = plt.colorbar(im1, ax=axes[1])
+cbar1.set_label('Intensity [a.u.]')
 
-# plt.tight_layout()
+plt.tight_layout()
 plt.show()
-
-# import csv
-
-# # --- CSV 出力 ---
-# row_index = NT // 2              # 中央行
-# x_vals = X3[row_index, :]        # X3 の中央行
-# w_vals = deltad[row_index, :]         # W の中央行
-
-# csv_path = R"C:\Users\mrtmk\OneDrive\Desktop\Research\GRINlens\csv\x3_w_2profile.csv"
-
-# with open(csv_path, "w", newline="") as f:
-#     writer = csv.writer(f)
-#     writer.writerow(["X3_mm", "W"])  # ヘッダ
-#     for x, w in zip(x_vals, w_vals):
-#         writer.writerow([x, w])
-
-# print(f"CSV saved: {csv_path}")
 
 

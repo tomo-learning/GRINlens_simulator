@@ -28,6 +28,7 @@ def fit_alpha_n1(d1, d2, L,
     # 1) SciPy があれば使う
     try:
         from scipy.optimize import least_squares
+
         def resid(theta):  # 残差ベクトル
             a, n1 = theta
             pred = d2_model(d1, a, n1, L)
@@ -76,11 +77,11 @@ def fit_alpha_n1(d1, d2, L,
     return a_hat, n1_hat, mse
 
 # 使い方例:
-d1=[26.5,30.5,32,35,]
+d1=[37.5,29.5,32]
 
-d2=[37,32,30,28] #実測配列（同じ長さ）、L: 既知の厚み（[mm] など単位一貫）
+d2=[28,35,32] #実測配列（同じ長さ）、L: 既知の厚み（[mm] など単位一貫）
 L=35.13
-a_hat, n1_hat, mse = fit_alpha_n1(d1, d2, L, a_bounds=(1e-3, 2), n1_bounds=(0,10.0), a0=0.05, n10=1.6)
+a_hat, n1_hat, mse = fit_alpha_n1(d1, d2, L, a_bounds=(1e-3, 4), n1_bounds=(1.40,1.5), a0=0.4, n10=1.4)
 print(a_hat, n1_hat, mse)
 
 
