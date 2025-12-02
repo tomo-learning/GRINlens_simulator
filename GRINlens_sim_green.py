@@ -93,7 +93,8 @@ for i in range(Ny):
 
 #===パラメータ=================================================
 Lo = 32 #infocus時の物体-レンズ間距離
-wavelens=[i for i in range(563,506,-1)]
+wavelens=[i for i in range(563,506,-1)] #カラーフィルタの波長帯域
+# 各波長での透過率
 Int_rate=[40.22,40.97,41.68,42.39,43.09,43.78,44.46,45.13,45.78,46.42,47.03,47.62,48.18,48.7,49.2,49.7,50.16,
 50.59,50.99,51.37,51.72,52.02,52.29,52.54,52.75,52.92,53.07,53.16,53.22,53.25,53.24,53.2,53.11,52.98,52.82,
 52.62,52.38,52.12,51.81,51.44,51.05,50.61,50.15,49.65,49.12,48.57,47.98,47.36,46.71,46.02,45.33,44.61,43.87,
@@ -120,12 +121,6 @@ R=0.5 #瞳半径
 #====================================================================
 
 
-# alpha=0.1783
-# n1=1.608
-# L=20.4
-# R=0.5225
-# d1=13.782
-# Lo=d1
 
 #-- 一次光学行列--------------------------------------------
 A=np.cos(alpha*L)
@@ -241,6 +236,7 @@ def PSF_singlewave(wavelen,r):
     return OTF[Npad:-Npad,Npad:-Npad]*r
 
 OTF=np.zeros((Ny,Nx),dtype='complex128')
+#各波長のOTFを重ね合わせる
 for i in range(20,41):#range(len(wavelens)):
     w=wavelens[i]*10**(-6)
     r=Int_rate[i]*10**(-2)
@@ -251,8 +247,8 @@ MTF=MTF/np.max(MTF)
 
 fx=np.fft.fftshift(np.fft.fftfreq(Nx,d=dx))
 fy=np.fft.fftshift(np.fft.fftfreq(Ny,d=dy))
-print("dfx",fx[1]-fx[0])
 FX,FY=np.meshgrid(fx,fy)
+
 #-- 物体を倍率Mでリサイズ→OTFで畳み込み
 Image_map=rescale_by_magnification(Object_map, dx, dy, 1/M)
 Fimg  = np.fft.fftshift(np.fft.fft2(Image_map))
@@ -260,11 +256,10 @@ Fout  = Fimg * OTF
 img_b = (np.fft.ifft2(np.fft.ifftshift(Fout)))
 img_b=np.abs(img_b)
 
-
 # ----------------------------
 # 可視化
 # ----------------------------
-# MTF（FY=0[lp/mm]で切り出し）
+#PSF(y=0で切り出し)
 center_row = Ny//2
 plt.figure(figsize=(7,4))
 plt.plot(X[center_row,:], img_b[center_row,:]/np.max(img_b[center_row,:]),color='blue')
@@ -276,6 +271,7 @@ plt.grid(True, alpha=0.3)
 plt.legend()
 plt.tight_layout()
 
+# MTF（FY=0[lp/mm]で切り出し）
 plt.figure(figsize=(7,4))
 plt.plot(FX[center_row,:], MTF[center_row,:],color='blue')
 plt.axvline(v_cutoff, color='r', ls='--', lw=1, label=f'Cutoff={v_cutoff:.1f} cy/mm')
@@ -294,38 +290,38 @@ plt.tight_layout()
 x_edges_mm = (np.arange(Nx + 1) - Nx/2) * dx
 y_edges_mm = (np.arange(Ny + 1) - Ny/2) * dy
 
-# vmax = max(Object_map.max(), img_b.max())
+vmax = max(Object_map.max(), img_b.max())
 
-# fig, axes = plt.subplots(1, 2, figsize=(9, 4))
+fig, axes = plt.subplots(1, 2, figsize=(9, 4))
 
-# im0 = axes[0].imshow(
-#     Object_map,
-#     extent=[x_edges_mm[0], x_edges_mm[-1], y_edges_mm[0], y_edges_mm[-1]],
-#     origin='lower', cmap='hot', vmin=0, vmax=vmax, aspect='equal'
-# )
-# axes[0].set_title('Input (aberration-free)')
-# axes[0].set_xlabel('x [mm]')     # ← 単位ラベル
-# axes[0].set_ylabel('y [mm]')
-# axes[0].axhline(0, color='w', lw=0.6, alpha=0.4)
-# axes[0].axvline(0, color='w', lw=0.6, alpha=0.4)
-# cbar0 = plt.colorbar(im0, ax=axes[0])
-# cbar0.set_label('Intensity [a.u.]')
+im0 = axes[0].imshow(
+    Object_map,
+    extent=[x_edges_mm[0], x_edges_mm[-1], y_edges_mm[0], y_edges_mm[-1]],
+    origin='lower', cmap='hot', vmin=0, vmax=vmax, aspect='equal'
+)
+axes[0].set_title('Input (aberration-free)')
+axes[0].set_xlabel('x [mm]')     # ← 単位ラベル
+axes[0].set_ylabel('y [mm]')
+axes[0].axhline(0, color='w', lw=0.6, alpha=0.4)
+axes[0].axvline(0, color='w', lw=0.6, alpha=0.4)
+cbar0 = plt.colorbar(im0, ax=axes[0])
+cbar0.set_label('Intensity [a.u.]')
 
-# im1 = axes[1].imshow(
-#     img_b/np.max(img_b),
-#     extent=[x_edges_mm[0], x_edges_mm[-1], y_edges_mm[0], y_edges_mm[-1]],
-#     origin='lower', cmap='hot', vmin=0, vmax=vmax, aspect='equal'
-# )
-# axes[1].set_title('After MTF')
-# axes[1].set_xlabel('x [mm]')     # ← 単位ラベル
-# axes[1].set_ylabel('y [mm]')
-# axes[1].axhline(0, color='w', lw=0.6, alpha=0.4)
-# axes[1].axvline(0, color='w', lw=0.6, alpha=0.4)
-# cbar1 = plt.colorbar(im1, ax=axes[1])
-# cbar1.set_label('Intensity [a.u.]')
+im1 = axes[1].imshow(
+    img_b/np.max(img_b),
+    extent=[x_edges_mm[0], x_edges_mm[-1], y_edges_mm[0], y_edges_mm[-1]],
+    origin='lower', cmap='hot', vmin=0, vmax=vmax, aspect='equal'
+)
+axes[1].set_title('After MTF')
+axes[1].set_xlabel('x [mm]')     # ← 単位ラベル
+axes[1].set_ylabel('y [mm]')
+axes[1].axhline(0, color='w', lw=0.6, alpha=0.4)
+axes[1].axvline(0, color='w', lw=0.6, alpha=0.4)
+cbar1 = plt.colorbar(im1, ax=axes[1])
+cbar1.set_label('Intensity [a.u.]')
 
+#PSFのみ表示
 plt.figure(figsize=(5, 5))
-
 plt.imshow(
     img_b / np.max(img_b),
     extent=[x_edges_mm[0], x_edges_mm[-1], y_edges_mm[0], y_edges_mm[-1]],
