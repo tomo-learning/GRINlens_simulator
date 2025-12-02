@@ -67,8 +67,8 @@ def rescale_by_magnification(img_b, dx, dy, M, alpha=None, fill=0.0):
     return out
 
 #--センサ面のパラメータ--
-Nx=128           # x方向のサンプリング数
-Ny=128            # y方向のサンプリング数
+Nx=64           # x方向のサンプリング数
+Ny=64            # y方向のサンプリング数
 dpi=1200          # センサのdpi
 inch=25.4         # インチ[mm]
 dx = inch/dpi     # x方向のサンプリング間隔 [mm/px]
@@ -98,17 +98,17 @@ Int_rate=[40.22,40.97,41.68,42.39,43.09,43.78,44.46,45.13,45.78,46.42,47.03,47.6
 50.59,50.99,51.37,51.72,52.02,52.29,52.54,52.75,52.92,53.07,53.16,53.22,53.25,53.24,53.2,53.11,52.98,52.82,
 52.62,52.38,52.12,51.81,51.44,51.05,50.61,50.15,49.65,49.12,48.57,47.98,47.36,46.71,46.02,45.33,44.61,43.87,
 43.1,42.29,41.47,40.62]
-dzo=-5#デフォーカス量
+dzo=3#デフォーカス量
 d1=Lo+dzo # デフォーカス時の物体-レンズ間距離
 
 #---瞳関数に関するパラメータ
 rho0=0.98 #瞳面振幅伝達関数のρ0
 k_A=3  #瞳面振幅伝達関数のk
-a=-0.45#-0.5 #球面収差の係数
+a=0#-0.45#-0.5 #球面収差の係数
 b=0 # 6-dimention
 c=0#-0.2 # 8-dimention
 d=0 #defocus
-e=0.6# delta
+e=1# delta
 
 #--最小二乗法で求めたGRINレンズパラメータ
 alpha=0.1003
@@ -216,7 +216,7 @@ def PSF_singlewave(wavelen,r):
     # 線形補間で埋まらない凸包外は最近傍で補完
     Tg_re_nn = griddata(pts, vals_re, (X3, Y3), method='nearest')
     Tg_re = np.where(np.isnan(Tg_re), Tg_re_nn, Tg_re)
-    deltad =np.abs(Tg_re)
+    deltad =(Tg_re)
     #====================================================================================
 
 
@@ -233,13 +233,22 @@ def PSF_singlewave(wavelen,r):
     W=-k*e*deltad+2*np.pi*a*Ws+2*np.pi*b*W6+2*np.pi*c*W8+2*np.pi*d*Wd
     T3=A*P3_aperture*np.exp(1j*W)
     #=================================================================
+    # plt.figure(figsize=(7,4))
+    # plt.plot(X3[NT//2,:], W[NT//2,:],color='blue')
+    # #plt.xlim(0, X3[NT//2,-1])
+    # plt.xlabel('x3 [mm]')
+    # plt.ylabel('W [mm]')
+    # plt.grid(True, alpha=0.3)
+    # plt.legend()
+    # plt.tight_layout()
+    # plt.show()
 
     #--- PSF OTF MTF計算
+    #h=M*np.exp(-1j*k*(d1+n1*L+d2ideal))/(wavelen**2*d2ideal**2)*np.exp(-1j*k*((X2)**2+(Y2)**2)/(2*d2))*np.fft.ifft2(T3)*(wavelen**2*d2ideal**2)
     h=np.fft.ifft2(np.fft.ifftshift(T3))
     PSF=(abs(h)**2)
     OTF=np.fft.fftshift(np.fft.fft2(PSF))
     return OTF[Npad:-Npad,Npad:-Npad]*r
-
 OTF=np.zeros((Ny,Nx),dtype='complex128')
 for i in range(20,41):#range(len(wavelens)):
     w=wavelens[i]*10**(-6)
@@ -268,14 +277,16 @@ img_b=np.abs(img_b)
 center_row = Ny//2
 plt.figure(figsize=(7,4))
 plt.plot(X[center_row,:], img_b[center_row,:]/np.max(img_b[center_row,:]),color='blue')
+plt.axvline(v_cutoff, color='r', ls='--', lw=1, label=f'Cutoff={v_cutoff:.1f} cy/mm')
 plt.xlim(-0.2, 0.2)
 plt.ylim(0, 1.05)
-plt.xlabel('x[mm]')
+plt.xlabel('x [mm]')
 plt.ylabel('PSF')
 plt.grid(True, alpha=0.3)
 plt.legend()
 plt.tight_layout()
 
+center_row = Ny//2
 plt.figure(figsize=(7,4))
 plt.plot(FX[center_row,:], MTF[center_row,:],color='blue')
 plt.axvline(v_cutoff, color='r', ls='--', lw=1, label=f'Cutoff={v_cutoff:.1f} cy/mm')
@@ -286,6 +297,25 @@ plt.ylabel('MTF')
 plt.grid(True, alpha=0.3)
 plt.legend()
 plt.tight_layout()
+# import os
+
+# # 保存先フォルダ（書き換えてください）
+# save_dir = R"C:\Users\mrtmk\OneDrive\Desktop\Research\GRINlens\green_MTF\Lo32_rho0.98,k_A3_a-0.45_e_0.6"
+
+# # フォルダ作成（存在する場合は無視）
+# os.makedirs(save_dir, exist_ok=True)
+
+# # --- ファイル名を自動生成 ---
+# filename = f"MTF_dzo{dzo+10}.png"
+
+# # パス結合
+# save_path = os.path.join(save_dir, filename)
+
+# # 保存
+# plt.savefig(save_path, dpi=300)
+# print(f"MTF image saved to: {save_path}")
+# print("fxlim",fx[-1])
+
 
 
 # 像（前後比較）
