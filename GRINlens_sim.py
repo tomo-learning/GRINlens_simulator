@@ -84,38 +84,37 @@ X,Y = np.meshgrid(x,y)
 Object_map = np.zeros((Ny, Nx), dtype=float)
 for i in range(Ny):
     for j in range(Nx):
-        if ( ( (X[i,j])**2 + (Y[i,j])**2 ) <= (0.1)**2 ):
+        if ( ( (X[i,j])**2 + (Y[i,j])**2 ) <= (0.01)**2 ):
             Object_map[i][j]=1
+        # if ( ( (X[i,j]) ) > 0 ):
+        #     Object_map[i][j]=1
 #-----------------------------------------------
 
 
 
-
-
-
 #===パラメータ=================================================
-Lo = 32.4 #infocus時の物体-レンズ間距離
+Lo = 32 #infocus時の物体-レンズ間距離
 wavelen=533e-6
 k=2*np.pi/wavelen
-dzo=0 #デフォーカス量
+dzo=5 #デフォーカス量
 d1=Lo+dzo # デフォーカス時の物体-レンズ間距離
 
 #---瞳関数に関するパラメータ
-rho0=1 #瞳面振幅伝達関数のρ0
-k_A=100  #瞳面振幅伝達関数のk
-a=1.2 #球面収差の係数
-b=0 # 6-dimention
-c=0 # 8-dimention
-d=0 #defocus
+# rho0=1 #瞳面振幅伝達関数のρ0
+# k_A=100  #瞳面振幅伝達関数のk
+# a=1.2 #球面収差の係数
+# b=0 # 6-dimention
+# c=0 # 8-dimention
+# d=0 #defocus
 e=1 # delta
 
 #--最小二乗法で求めたGRINレンズパラメータ
-alpha=0.0995
-n1=1.589
+alpha=0.1003
+n1=1.592
 #-------------------------------------
 
 L=35.13 # GRINレンズのz方向の長さ
-R=0.55 #瞳半径
+R=0.5 #瞳半径
 #====================================================================
 
 
@@ -210,38 +209,27 @@ Tg_re = griddata(pts, vals_re, (X3, Y3), method='linear')
 # 線形補間で埋まらない凸包外は最近傍で補完
 Tg_re_nn = griddata(pts, vals_re, (X3, Y3), method='nearest')
 Tg_re = np.where(np.isnan(Tg_re), Tg_re_nn, Tg_re)
-deltad = np.abs(Tg_re)
+deltad = (Tg_re)
 #====================================================================================
 
 
 # ======収差伝達関数 式(18)===================================
 P3_aperture = np.where((X3)**2 + (Y3)**2 <= (R)**2, 1.0, 0.0)
-Ws=(np.sqrt((X3)**2 + (Y3)**2)/R)**4 #球面収差関数
-W6=(np.sqrt((X3)**2 + (Y3)**2)/R)**6
-W8=(np.sqrt((X3)**2 + (Y3)**2)/R)**8
-Wd=(np.sqrt((X3)**2 + (Y3)**2)/R)**2
+# Ws=(np.sqrt((X3)**2 + (Y3)**2)/R)**4 #球面収差関数
+# W6=(np.sqrt((X3)**2 + (Y3)**2)/R)**6
+# W8=(np.sqrt((X3)**2 + (Y3)**2)/R)**8
+# Wd=(np.sqrt((X3)**2 + (Y3)**2)/R)**2
 #--瞳面振幅伝達関数
-A = np.ones_like(P3_aperture) 
-A = np.sqrt(np.exp(-(np.sqrt((X3)**2+(Y3)**2)/R/rho0)**k_A))
+# A = np.ones_like(P3_aperture) 
+# A = np.sqrt(np.exp(-(np.sqrt((X3)**2+(Y3)**2)/R/rho0)**k_A))
 
-W=-k*e*deltad+2*np.pi*a*Ws+2*np.pi*b*W6+2*np.pi*c*W8+2*np.pi*d*Wd
-T3=A*P3_aperture*np.exp(1j*W)
+W=-k*e*deltad#+2*np.pi*a*Ws+2*np.pi*b*W6+2*np.pi*c*W8+2*np.pi*d*Wd
+T3=P3_aperture*np.exp(1j*W)
 #=================================================================
-plt.figure(figsize=(7,4))
-plt.plot(X3[NT//2,:], W[NT//2,:],color='blue')
-plt.xlim(-0.5, 0.5)
-plt.ylim(0,1)
-plt.xlabel('x3 [mm]')
-plt.ylabel('W [mm]')
-plt.grid(True, alpha=0.3)
-plt.legend()
-plt.tight_layout()
-plt.show()
 
 #--- PSF OTF MTF計算
-#h=M*np.exp(-1j*k*(d1+n1*L+d2ideal))/(wavelen**2*d2ideal**2)*np.exp(-1j*k*((X2)**2+(Y2)**2)/(2*d2))*np.fft.ifft2(T3)*(wavelen**2*d2ideal**2)
 h=np.fft.ifft2(np.fft.ifftshift(T3))
-PSF=np.fft.fftshift(abs(h)**2)
+PSF=(abs(h)**2)
 OTF=np.fft.fftshift(np.fft.fft2(PSF))
 OTF=OTF/np.max(OTF)
 OTF_c=OTF[Npad:-Npad,Npad:-Npad]
@@ -252,17 +240,34 @@ fx=x3/(wavelen*d2)
 fy=y3/(wavelen*d2)
 FX,FY=np.meshgrid(fx,fy)
 print("dfx",fx[1]-fx[0])
+print(1/(Nx*(fx[1]-fx[0])))
 #-- 物体を倍率Mでリサイズ→OTFで畳み込み
+
 Image_map=rescale_by_magnification(Object_map, dx, dy, 1/M)
 Fimg  = np.fft.fftshift(np.fft.fft2(Image_map))
 Fout  = Fimg * OTF_c
-img_b = np.fft.fftshift(np.fft.ifft2(np.fft.ifftshift(Fout)))
+img_b = (np.fft.ifft2(np.fft.ifftshift(Fout)))
 img_b=np.abs(img_b)
+PSF2=np.fft.fftshift(np.abs(np.fft.ifft2(np.fft.ifftshift(OTF_c))))
 
 
 # ----------------------------
 # 可視化
 # ----------------------------
+PSF=np.fft.fftshift(PSF)
+PSF=PSF[Npad:-Npad,Npad:-Npad]
+
+center_row = Nx//2
+plt.figure(figsize=(7,4))
+plt.plot(X[center_row,:], PSF2[center_row,:]/np.max(PSF2[center_row,:]),color='blue')
+plt.xlim(-0.2, 0.2)
+plt.ylim(0, 1.05)
+plt.xlabel('x[mm]')
+plt.ylabel('PSF')
+plt.grid(True, alpha=0.3)
+plt.legend()
+plt.tight_layout()
+
 # MTF（FY=0[lp/mm]で切り出し）
 center_row = NT//2
 plt.figure(figsize=(7,4))
@@ -285,35 +290,35 @@ y_edges_mm = (np.arange(Ny + 1) - Ny/2) * dy
 
 vmax = max(Object_map.max(), img_b.max())
 
-# fig, axes = plt.subplots(1, 2, figsize=(9, 4))
+fig, axes = plt.subplots(1, 2, figsize=(9, 4))
 
-# im0 = axes[0].imshow(
-#     Object_map,
-#     extent=[x_edges_mm[0], x_edges_mm[-1], y_edges_mm[0], y_edges_mm[-1]],
-#     origin='lower', cmap='hot', vmin=0, vmax=vmax, aspect='equal'
-# )
-# axes[0].set_title('Input (aberration-free)')
-# axes[0].set_xlabel('x [mm]')     # ← 単位ラベル
-# axes[0].set_ylabel('y [mm]')
-# axes[0].axhline(0, color='w', lw=0.6, alpha=0.4)
-# axes[0].axvline(0, color='w', lw=0.6, alpha=0.4)
-# cbar0 = plt.colorbar(im0, ax=axes[0])
-# cbar0.set_label('Intensity [a.u.]')
+im0 = axes[0].imshow(
+    Object_map,
+    extent=[x_edges_mm[0], x_edges_mm[-1], y_edges_mm[0], y_edges_mm[-1]],
+    origin='lower', cmap='hot', vmin=0, vmax=vmax, aspect='equal'
+)
+axes[0].set_title('Input (aberration-free)')
+axes[0].set_xlabel('x [mm]')     # ← 単位ラベル
+axes[0].set_ylabel('y [mm]')
+axes[0].axhline(0, color='w', lw=0.6, alpha=0.4)
+axes[0].axvline(0, color='w', lw=0.6, alpha=0.4)
+cbar0 = plt.colorbar(im0, ax=axes[0])
+cbar0.set_label('Intensity [a.u.]')
 
-# im1 = axes[1].imshow(
-#     img_b,
-#     extent=[x_edges_mm[0], x_edges_mm[-1], y_edges_mm[0], y_edges_mm[-1]],
-#     origin='lower', cmap='hot', vmin=0, vmax=vmax, aspect='equal'
-# )
-# axes[1].set_title('After MTF (diffraction × Gaussian)')
-# axes[1].set_xlabel('x [mm]')     # ← 単位ラベル
-# axes[1].set_ylabel('y [mm]')
-# axes[1].axhline(0, color='w', lw=0.6, alpha=0.4)
-# axes[1].axvline(0, color='w', lw=0.6, alpha=0.4)
-# cbar1 = plt.colorbar(im1, ax=axes[1])
-# cbar1.set_label('Intensity [a.u.]')
+im1 = axes[1].imshow(
+    img_b,
+    extent=[x_edges_mm[0], x_edges_mm[-1], y_edges_mm[0], y_edges_mm[-1]],
+    origin='lower', cmap='hot', vmin=0, vmax=vmax, aspect='equal'
+)
+axes[1].set_title('After MTF (diffraction × Gaussian)')
+axes[1].set_xlabel('x [mm]')     # ← 単位ラベル
+axes[1].set_ylabel('y [mm]')
+axes[1].axhline(0, color='w', lw=0.6, alpha=0.4)
+axes[1].axvline(0, color='w', lw=0.6, alpha=0.4)
+cbar1 = plt.colorbar(im1, ax=axes[1])
+cbar1.set_label('Intensity [a.u.]')
 
-# plt.tight_layout()
+plt.tight_layout()
 plt.show()
 
 # import csv
