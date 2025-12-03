@@ -259,7 +259,7 @@ PSF=PSF[Npad:-Npad,Npad:-Npad]
 
 center_row = Nx//2
 plt.figure(figsize=(7,4))
-plt.plot(X[center_row,:], PSF2[center_row,:]/np.max(PSF2[center_row,:]),color='blue')
+plt.plot(X[center_row,:], PSF[center_row,:]/np.max(PSF[center_row,:]),color='blue')
 plt.xlim(-0.2, 0.2)
 plt.ylim(0, 1.05)
 plt.xlabel('x[mm]')
