@@ -181,7 +181,7 @@ Z = z[:, np.newaxis, np.newaxis]     # shape = (Nz,1,1)
 den_raw = n1**2 - n1**2*alpha**2*(X2**2 + Y2**2) - (1 - C0**2)
 
 # 負なら 1、正なら sqrt(den_raw)
-den = np.where(den_raw > 0, np.sqrt(den_raw), 1.0)
+den = np.sqrt(den_raw)
 XZ=np.zeros((Z*X2).shape)
 YZ=np.zeros((Z*Y2).shape)
 
